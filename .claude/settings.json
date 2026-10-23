@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'python3 \"$CLAUDE_PROJECT_DIR/guardrails/protect.py\"; [ $? -eq 0 ] || exit 2'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

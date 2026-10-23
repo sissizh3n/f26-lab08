@@ -1,6 +1,8 @@
 package edu.cmu.cs214.campusreserve.core.domain;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -8,6 +10,9 @@ import java.util.Objects;
  *
  * <p>Bookings reference the room and the user by id rather than by object, so a
  * stored booking stays valid when a room is renamed or taken out of service.
+ *
+ * <p>{@code history} lists every modification in the order it was made, oldest
+ * first. A booking that was never modified has an empty history.
  */
 public record Booking(
     String id,
@@ -16,7 +21,8 @@ public record Booking(
     TimeInterval interval,
     int attendees,
     BookingStatus status,
-    Instant createdAt) {
+    Instant createdAt,
+    List<BookingChange> history) {
 
     public Booking {
         id = Identifiers.require(id, "booking id");
@@ -28,6 +34,19 @@ public record Booking(
         if (attendees <= 0) {
             throw new IllegalArgumentException("Attendees must be positive: " + attendees);
         }
+        history = List.copyOf(Objects.requireNonNull(history, "history"));
+    }
+
+    /** A booking with no modification history. */
+    public Booking(
+        String id,
+        String roomId,
+        String userId,
+        TimeInterval interval,
+        int attendees,
+        BookingStatus status,
+        Instant createdAt) {
+        this(id, roomId, userId, interval, attendees, status, createdAt, List.of());
     }
 
     /** Builds a confirmed booking. */
@@ -38,7 +57,18 @@ public record Booking(
 
     /** Returns a cancelled copy of this booking. */
     public Booking cancelled() {
-        return new Booking(id, roomId, userId, interval, attendees, BookingStatus.CANCELLED, createdAt);
+        return new Booking(id, roomId, userId, interval, attendees, BookingStatus.CANCELLED, createdAt, history);
+    }
+
+    /**
+     * Returns a copy of this booking over {@code newInterval} for {@code newAttendees},
+     * with the change appended to its history. The id, room, owner, status, and
+     * creation time stay the same.
+     */
+    public Booking modified(TimeInterval newInterval, int newAttendees, Instant at) {
+        List<BookingChange> changes = new ArrayList<>(history);
+        changes.add(new BookingChange(interval, attendees, newInterval, newAttendees, at));
+        return new Booking(id, roomId, userId, newInterval, newAttendees, status, createdAt, changes);
     }
 
     /** Does this booking still hold the room? */

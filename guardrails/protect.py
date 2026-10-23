@@ -53,7 +53,9 @@ PLACEHOLDER = "MODULE-YOU-ARE-NOT-TOUCHING/"
 
 # EDIT THIS LIST. One repository-relative directory per entry, trailing slash.
 PROTECTED_PATHS = [
-    PLACEHOLDER,
+    "billing/",
+    "cli/",
+    "accounts/",
 ]
 
 # Files that must not change whatever the plan says. These are the conventions
@@ -62,6 +64,9 @@ PROTECTED_FILES = [
     "AGENTS.md",
     "CLAUDE.md",
     "CHANGE-REQUEST.md",
+    # PLAN.md: the revenue report changes only through the shared ledger fold.
+    "analytics/campusreserve_analytics/revenue.py",
+    "analytics/tests/test_revenue.py",
 ]
 
 # Tools that touch no file, so this hook has nothing to check and lets them by.

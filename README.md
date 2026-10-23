@@ -1,8 +1,11 @@
+# Tools Users
+Claude Code, Opus 5.5.
+
 # CampusReserve
 
 A campus room reservation platform. People book rooms, join a waitlist when a
 slot is taken, and get the slot when it frees up. Staff price the bookings,
-manage the catalog from a command line, and read reports off the event log.
+ma catalog from a command line, and read reports off the event log.
 
 Java 21 across seven Maven modules, plus a Python 3.11 analytics package. No
 runtime dependencies on either side. The HTTP server is
@@ -35,7 +38,7 @@ mvn -B test
 And for the Python side, from `analytics/`:
 
 ```
-pytest
+python3 -m pytest
 ```
 
 `SETUP.md` has the per-module gate commands, the expected test counts, and what
@@ -76,8 +79,8 @@ The reports, against that exported log:
 
 ```
 cd analytics
-python -m campusreserve_analytics utilization --events ../events.jsonl
-python -m campusreserve_analytics revenue --events ../events.jsonl --format csv
+python3 -m campusreserve_analytics utilization --events ../events.jsonl
+python3 -m campusreserve_analytics revenue --events ../events.jsonl --format csv
 ```
 
 ## Where things are

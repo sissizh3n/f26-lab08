@@ -122,6 +122,15 @@ public final class BookingRules {
         return Optional.empty();
     }
 
+    /**
+     * May {@code requesterId} modify {@code booking} right now? Only the owner,
+     * and only while the booking still holds the room and has not started. The
+     * window is the same as for cancelling.
+     */
+    public Optional<RejectionReason> checkModifiable(Booking booking, String requesterId) {
+        return checkCancellable(booking, requesterId);
+    }
+
     /** Is the booking still in the future? */
     public boolean isUpcoming(Booking booking) {
         return !booking.hasStartedBy(now());

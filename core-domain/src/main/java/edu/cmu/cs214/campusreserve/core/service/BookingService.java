@@ -4,6 +4,7 @@ import edu.cmu.cs214.campusreserve.core.domain.Booking;
 import edu.cmu.cs214.campusreserve.core.domain.BookingOutcome;
 import edu.cmu.cs214.campusreserve.core.domain.BookingRequest;
 import edu.cmu.cs214.campusreserve.core.domain.CancellationResult;
+import edu.cmu.cs214.campusreserve.core.domain.ModificationResult;
 import edu.cmu.cs214.campusreserve.core.domain.RejectionReason;
 import edu.cmu.cs214.campusreserve.core.domain.Room;
 import edu.cmu.cs214.campusreserve.core.domain.TimeInterval;
@@ -152,6 +153,70 @@ public final class BookingService {
     }
 
     /**
+     * Changes the interval, the attendee count, or both, of a booking on behalf of
+     * its owner. The room stays the same.
+     *
+     * <p>The new values must pass every request rule, and the room's calendar and
+     * the owner's own calendar are re-checked with the booking itself left out, so
+     * a booking never collides with itself. The cap on bookings held does not
+     * apply: the booking already counts toward it. A refused modification changes
+     * nothing. A modification that asks for what the booking already holds stores
+     * nothing and records no history.
+     *
+     * <p>The changed booking is stored first. Only then, and only when the
+     * interval moved or resized, does the room's waitlist get a promotion pass, so
+     * every candidate is checked against the booking's new interval.
+     */
+    public ModificationResult modifyBooking(
+        String bookingId, String requesterId, TimeInterval newInterval, int newAttendees) {
+        Objects.requireNonNull(bookingId, "bookingId");
+        Objects.requireNonNull(requesterId, "requesterId");
+        Objects.requireNonNull(newInterval, "newInterval");
+
+        Optional<Booking> stored = bookings.findById(bookingId);
+        if (stored.isEmpty()) {
+            return ModificationResult.rejected(RejectionReason.BOOKING_NOT_FOUND);
+        }
+        Booking booking = stored.get();
+
+        Optional<RejectionReason> failure = rules.checkModifiable(booking, requesterId);
+        if (failure.isPresent()) {
+            return ModificationResult.rejected(failure.get());
+        }
+
+        boolean intervalChanged = !booking.interval().equals(newInterval);
+        if (!intervalChanged && booking.attendees() == newAttendees) {
+            return new ModificationResult.Unchanged(booking);
+        }
+
+        Optional<Room> room = rooms.findById(booking.roomId());
+        if (room.isEmpty()) {
+            return ModificationResult.rejected(RejectionReason.ROOM_NOT_FOUND);
+        }
+        BookingRequest request = BookingRequest.of(booking.roomId(), booking.userId(), newInterval, newAttendees);
+        Optional<RejectionReason> ruleFailure = rules.checkRequest(request, room.get());
+        if (ruleFailure.isPresent()) {
+            return ModificationResult.rejected(ruleFailure.get());
+        }
+
+        if (conflictChecker.hasConflict(
+            withoutBooking(bookings.findActiveByRoom(booking.roomId()), bookingId), newInterval)) {
+            return ModificationResult.rejected(RejectionReason.ROOM_UNAVAILABLE);
+        }
+        if (conflictChecker.hasConflict(
+            withoutBooking(bookings.findActiveByUser(booking.userId()), bookingId), newInterval)) {
+            return ModificationResult.rejected(RejectionReason.USER_DOUBLE_BOOKED);
+        }
+
+        Booking modified = booking.modified(newInterval, newAttendees, now());
+        bookings.save(modified);
+
+        List<CancellationResult.Promotion> promotions =
+            intervalChanged ? promoteWaitlist(modified.roomId()) : List.of();
+        return new ModificationResult.Modified(modified, promotions);
+    }
+
+    /**
      * Drops the asker's own waitlist entry. This is the only other place waitlist
      * rows are removed, and it lives here for the same reason promotion does.
      */
@@ -283,6 +348,11 @@ public final class BookingService {
     /** Does the user already hold a booking over this interval, in any room? */
     private boolean hasOwnOverlap(String userId, TimeInterval interval) {
         return conflictChecker.hasConflict(bookings.findActiveByUser(userId), interval);
+    }
+
+    /** {@code held} with the booking under {@code bookingId} left out. */
+    private static List<Booking> withoutBooking(List<Booking> held, String bookingId) {
+        return held.stream().filter(booking -> !booking.id().equals(bookingId)).toList();
     }
 
     /** Hands the event on. A failing subscriber must not undo a stored booking. */
